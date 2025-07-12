@@ -2018,4 +2018,197 @@ BELANGRIJK: Pas je adviezen specifiek aan op basis van dit profiel.
                 let responseWithContext = result.response;
                 
                 // Add contextual contact option if profile is completed
-                if (userProfile.setup_completed && (message.length > 50 || result.source
+                if (userProfile.setup_completed && (message.length > 50 || result.source === 'ai')) {
+                    responseWithContext += `<br><br><strong>📧 Direct Expert Contact:</strong><br><a href="${createContextualMailtoLink('Vraag: ' + message.substring(0, 50) + '...')}" style="color: #4a90e2; text-decoration: none; font-weight: bold;">📧 Stuur deze vraag + mijn context naar expert</a>`;
+                }
+                
+                // Add bot response
+                const messageType = result.source === 'ai' ? 'ai' : 'bot';
+                addMessage(responseWithContext, false, messageType);
+                
+                // Add to conversation history
+                conversationHistory.push({ role: "assistant", content: result.response });
+                
+                // Keep conversation history manageable
+                if (conversationHistory.length > 20) {
+                    conversationHistory = conversationHistory.slice(-16);
+                }
+                
+            } catch (error) {
+                hideTypingIndicator();
+                console.error('Error:', error);
+                addMessage(`🔧 <strong>Even een technisch probleempje!</strong><br><br>Geen zorgen, neem direct contact op met onze expert:<br><br>📧 <a href='${createContextualMailtoLink('Chatbot Technische Vraag')}' style='color: #4a90e2; text-decoration: none; font-weight: bold;'>expert@dentalspace.pro</a><br>☎️ <a href='tel:+31201234567' style='color: #4a90e2; text-decoration: none; font-weight: bold;'>+31 (0)20 123 4567</a><br><br><strong>💡 Voordeel:</strong> Persoonlijke begeleiding werkt altijd perfect!`, false, 'bot');
+            }
+            
+            // Re-enable input
+            input.disabled = false;
+            sendButton.disabled = false;
+            sendButton.textContent = '➤';
+            input.focus();
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function scrollToChat() {
+            document.getElementById('chat').scrollIntoView({ behavior: 'smooth' });
+            setTimeout(() => {
+                document.getElementById('chatInput').focus();
+            }, 1000);
+        }
+
+        // Debug function - can be called from browser console
+        window.debugAI = function() {
+            console.log('🔍 AI Debug Info (Secure Backend):');
+            console.log('AI Enabled:', aiEnabled);
+            console.log('AI Initialized:', aiInitialized);
+            console.log('Backend endpoint: /api/chat');
+            
+            // Test a simple AI call via backend
+            console.log('Testing backend AI call...');
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: 'Say hello',
+                    context: '',
+                    conversationHistory: []
+                })
+            }).then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error(`Backend error: ${response.status}`);
+                }
+            }).then(data => {
+                console.log('✅ Backend Test Response:', data);
+            }).catch(error => {
+                console.error('❌ Backend Test Error:', error);
+            });
+        };
+
+        // Manual AI test function 
+        window.testAI = function() {
+            testAIConnection();
+        };
+
+        // Test AI connection immediately 
+        async function testAIConnection() {
+            console.log('🧪 Testing secure backend connection...');
+            updateAIStatus('🧪 Testing Backend...', '#17a2b8');
+            
+            try {
+                const testResponse = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: "Test connection - respond with just 'OK'",
+                        context: "",
+                        conversationHistory: []
+                    })
+                });
+
+                if (testResponse.ok) {
+                    console.log('✅ Backend connection successful!');
+                    updateAIStatus('🟢 AI Actief', '#28a745');
+                    aiEnabled = true;
+                    aiInitialized = true;
+                } else {
+                    const errorText = await testResponse.text();
+                    console.error('❌ Backend test failed:', testResponse.status, errorText);
+                    
+                    if (testResponse.status === 404) {
+                        updateAIStatus('❌ Backend Not Found', '#dc3545');
+                        console.error('Backend API endpoint /api/chat not found - need to deploy backend');
+                    } else if (testResponse.status === 500) {
+                        updateAIStatus('❌ Backend Error', '#dc3545');
+                    } else {
+                        updateAIStatus('❌ Backend Issue', '#dc3545');
+                    }
+                    aiEnabled = false;
+                }
+            } catch (error) {
+                console.error('❌ Backend connection test failed:', error);
+                updateAIStatus('❌ Backend Offline', '#dc3545');
+                console.error('Need to deploy backend API - see setup instructions');
+                aiEnabled = false;
+            }
+        }
+
+        // Cookie Management
+        function acceptCookies() {
+            if (typeof(Storage) !== "undefined") {
+                localStorage.setItem('cookiesAccepted', 'true');
+            }
+            const notice = document.getElementById('cookieNotice');
+            if (notice) {
+                notice.classList.remove('show');
+                notice.style.display = 'none';
+            }
+        }
+
+        function checkCookies() {
+            // Only show cookie notice if localStorage is available and cookies not yet accepted
+            if (typeof(Storage) !== "undefined" && !localStorage.getItem('cookiesAccepted')) {
+                setTimeout(() => {
+                    const notice = document.getElementById('cookieNotice');
+                    if (notice) {
+                        notice.classList.add('show');
+                        notice.style.display = 'block';
+                    }
+                }, 2000);
+            }
+        }
+
+        // Initialize and run tests
+        document.addEventListener('DOMContentLoaded', () => {
+            // Test AI immediately on load
+            testAIConnection();
+            
+            // Focus input
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.focus();
+            }
+            
+            // Show profile button for users to optionally create profile
+            setTimeout(() => {
+                const profileButton = document.getElementById('profileButton');
+                if (profileButton) {
+                    profileButton.style.display = 'block';
+                }
+            }, 1000);
+            
+            // Load existing profile if available
+            loadUserProfile();
+            
+            // Check cookies
+            checkCookies();
+            
+            // Console startup info
+            console.log('🚀 DentalSpace Pro Website geladen!');
+            console.log('🌐 Domain: https://dentalspace.pro');
+            console.log('🔑 API Key test wordt uitgevoerd...');
+            
+            // Test essential functions
+            try {
+                // Test that all key elements exist
+                if (!document.getElementById('chatInput')) console.error('❌ chatInput element missing');
+                if (!document.getElementById('chatMessages')) console.error('❌ chatMessages element missing');
+                if (!document.getElementById('sendButton')) console.error('❌ sendButton element missing');
+                
+                console.log('✅ All essential elements found');
+                
+            } catch (error) {
+                console.error('❌ Initialization error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
